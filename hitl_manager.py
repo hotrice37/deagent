@@ -1,28 +1,26 @@
-# hitl_manager.py
-# Manages the Human-in-the-Loop (HITL) review process for ETL task definitions,
-# including iterative feedback and modification.
+"""
+hitl_manager.py
+Manages the Human-in-the-Loop (HITL) review process for ETL task definitions,
+including iterative feedback and modification.
+"""
 
+# General Imports
 import json
-from typing import List, Optional, Callable # Import Callable for type hinting functions
+from typing import List, Callable
 
-# AutoGen Imports
-from autogen import UserProxyAgent, AssistantAgent, ConversableAgent
+# AutoGen Imports - for agent management
+from autogen import UserProxyAgent, AssistantAgent
+
+# LangChain Imports - for LLM and prompt handling
 from langchain.prompts import PromptTemplate
 from langchain_core.exceptions import OutputParserException
 from langchain_core.documents import Document # Import Document for type hinting
 from langchain_core.output_parsers import PydanticOutputParser
 
-# Assuming schemas.py and utils.py are in the same project structure
+# Project Imports - for schema and utility functions
 from schemas import ETLTaskDefinition
 from vector_db_manager import VectorDBManager # Import for type hinting (db_manager_approved_tasks)
 from utils import extract_json_from_llm_output # Import the utility function
-
-# To avoid circular import with parser_agent, we don't import ParserAgent directly
-# for type hinting its methods or accessing its LLM property. Instead, we'll assume
-# the `parser_agent_instance` passed into initiate_hitl_review has an `llm` attribute
-# and a `parser` attribute (PydanticOutputParser).
-# For stricter type hinting without circular imports, you might define a Protocol
-# or use a forward reference string, but for now, we'll keep it flexible.
 
 def initiate_hitl_review(
     task_json: dict,
@@ -53,11 +51,11 @@ def initiate_hitl_review(
         code_execution_config={"use_docker": False}
     )
 
-    # Using AssistantAgent as requested, configured not to auto-reply in this specific chat flow.
+    # Using AssistantAgent as requested, configured not to auto-reply.
     parser_messenger = AssistantAgent(
         name="Parser_Messenger",
         system_message="You present the ETL task definition and facilitate human feedback. You do not generate responses using an LLM in this chat.",
-        llm_config=False, # Crucially, this disables its ability to use an LLM for generating its own responses within this specific chat flow.
+        llm_config=False, # Disables its ability to use an LLM for generating its own responses
         max_consecutive_auto_reply=0, # Ensure no auto-replies
     )
 
@@ -168,7 +166,7 @@ def initiate_hitl_review(
                     print(cleaned_json_string_mod)
                     print("----------------------------------------------------------------------")
                 
-                # Now, attempt to parse the cleaned string with PydanticOutputParser
+                # Attempt to parse the cleaned string with PydanticOutputParser
                 updated_task_pydantic = parser_agent_instance.parser.parse(cleaned_json_string_mod)
                 current_task_json = updated_task_pydantic.model_dump()
                 print("Task definition updated. Presenting for re-review.")

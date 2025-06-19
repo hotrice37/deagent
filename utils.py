@@ -1,18 +1,18 @@
-# utils.py
-# Contains utility functions used across different modules, such as
-# dataset metadata ingestion and approved task ingestion, and JSON extraction.
+"""
+utils.py
+Contains utility functions used across different modules, such as
+dataset metadata ingestion and approved task ingestion, and JSON extraction.
+"""
 
+# General Imports
 import pandas as pd
 import hashlib
-import json
 import uuid
-import re # Import re for regular expressions
+import re
 from typing import List, Optional
 
-# Assuming schemas.py is in the same project structure
-from schemas import DatasetMetadata
-from vector_db_manager import VectorDBManager # Import for type hinting
-from langchain_core.documents import Document # Import for type hinting
+# Project Imports- for vector database management
+from vector_db_manager import VectorDBManager
 
 
 # Helper function for robust JSON extraction from LLM output
@@ -55,7 +55,7 @@ def ingest_dataset_metadata(db_manager: VectorDBManager, csv_path: str):
     metadatas_to_add = []
     ids_to_add = [] # List for deterministic IDs
 
-    # Assuming CSV columns are 'Table', 'Row', 'Description', 'Special' (if 'Special' exists, it's ignored)
+    # CSV columns are 'Table', 'Row', 'Description', 'Special' ('Special' is ignored)
     for index, row in columns_df.iterrows():
         table_name = str(row['Table']).strip() if pd.notna(row['Table']) else None
         column_name = str(row['Row']).strip() if pd.notna(row['Row']) else None

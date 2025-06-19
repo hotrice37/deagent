@@ -1,20 +1,31 @@
-# vector_db_manager.py
-# Manages interactions with the Pinecone vector database for storing and querying embeddings.
+"""
+vector_db_manager.py
+Manages interactions with the Pinecone vector database for storing and querying embeddings.
+"""
 
-import os
+# General Imports
 import time
 import uuid
 from typing import List, Optional
 
-# Pinecone Import - Using the new Pinecone client
+# Pinecone Imports - Using the new Pinecone client
 from pinecone import Pinecone, ServerlessSpec
 from pinecone.exceptions import PineconeApiException # Specific exception from pinecone.exceptions
+
+# LangChain Imports - Ollama for embeddings
 from langchain_ollama.embeddings import OllamaEmbeddings
 from langchain_core.documents import Document
 
 class VectorDBManager:
     """Manages the interaction with the Pinecone serverless vector database."""
-    def __init__(self, index_name: str, cloud: str, region: str, api_key: str, embedding_model_name: str):
+    def __init__(
+            self,
+            index_name: str,
+            cloud: str,
+            region: str,
+            api_key: str,
+            embedding_model_name: str
+        ):
         """
         Initializes the VectorDBManager with Pinecone.
         :param index_name: The name of the Pinecone index.
@@ -36,10 +47,15 @@ class VectorDBManager:
             self.embedding_dimension = len(sample_embedding)
             print(f"Embedding dimension detected for {index_name}: {self.embedding_dimension}")
         except Exception as e:
-            raise RuntimeError(f"Failed to get embedding dimension from Ollama: {e}. Ensure Ollama is running and model '{embedding_model_name}' is pulled.")
+            raise RuntimeError(
+                f"Failed to get embedding dimension from Ollama: {e}. "
+                f"Ensure Ollama is running and model '{embedding_model_name}' is pulled."
+            ) from e
+        index_names = [index["name"] for index in self.pinecone.list_indexes().get("indexes", [])]
 
+        print(f"DEBUG_VDB: Available Pinecone indexes: {index_names}")
         # Index creation logic with try-except for graceful handling
-        if index_name not in self.pinecone.list_indexes():
+        if index_name not in index_names:
             print(f"Attempting to create Pinecone serverless index '{index_name}' in {cloud} {region}...")
             try:
                 self.pinecone.create_index(
@@ -127,6 +143,7 @@ class VectorDBManager:
             include_metadata=True
         )
 
+        # Convert Pinecone response to LangChain Document format
         results = []
         for match in response.matches:
             page_content = match.metadata.get("text_content", "")

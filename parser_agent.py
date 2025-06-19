@@ -1,15 +1,19 @@
-# parser_agent.py
-# Defines the ParserAgent, responsible for converting natural language requests
-# into structured ETL task definitions.
+"""
+parser_agent.py
+Defines the ParserAgent, responsible for converting natural language requests
+into structured ETL task definitions.
+"""
 
+# General Imports
 import json
-from typing import List # Import List for type hinting
+
+# LangChain Imports - for LLM and prompt handling
 from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from langchain_ollama.llms import OllamaLLM
 from langchain_core.exceptions import OutputParserException
 
-# Assuming schemas.py and vector_db_manager.py are in the same project structure
+# Project Imports - for schema and utility functions
 from schemas import ETLTaskDefinition # Import the schema
 from vector_db_manager import VectorDBManager # Import for type hinting
 from utils import extract_json_from_llm_output # Import the utility function
@@ -100,7 +104,7 @@ Your task is to analyze the user's request and any provided historical context o
                 print(cleaned_json_string)
                 print("----------------------------------------------------------")
 
-            # Now, attempt to parse the cleaned string with PydanticOutputParser
+            # Attempt to parse the cleaned string with PydanticOutputParser
             parsed_output_pydantic = self.parser.parse(cleaned_json_string)
             print("DEBUG_FLOW: Pydantic parsing successful.")
             return parsed_output_pydantic.model_dump()

@@ -1,5 +1,7 @@
-# schemas.py
-# Defines Pydantic schemas for structured data models used throughout the ETL pipeline system.
+"""
+schemas.py
+Defines Pydantic schemas for structured data models used throughout the ETL pipeline system.
+"""
 
 from pydantic import BaseModel, Field
 from typing import List, Literal, Optional

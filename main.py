@@ -1,12 +1,12 @@
-# main.py
-# Main entry point for the ETL Parser System. Handles configuration,
-# initialization of agents and databases, and orchestrates the workflow.
+"""
+main.py
+Main entry point for the ETL Parser System. Handles configuration,
+initialization of agents and databases, and orchestrates the workflow.
+"""
 
 import os
 from dotenv import load_dotenv
 import json
-from typing import List
-from langchain_core.documents import Document
 
 # Import modular components
 from vector_db_manager import VectorDBManager
@@ -19,8 +19,8 @@ load_dotenv() # Load environment variables from .env file
 # --- Configuration ---
 # Pinecone Configuration for Serverless Index
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-PINECONE_INDEX_NAME = "etl-backlog-production-index" # Production index name for dataset metadata
-PINECONE_APPROVED_TASKS_INDEX_NAME = "etl-approved-tasks-index" # New index for approved ETL tasks
+PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME") # Production index name for dataset metadata
+PINECONE_APPROVED_TASKS_INDEX_NAME = os.getenv("PINECONE_APPROVED_TASKS_INDEX_NAME") # New index for approved ETL tasks
 PINECONE_CLOUD = os.getenv("PINECONE_CLOUD", "aws") # Default to aws if not set
 PINECONE_REGION = os.getenv("PINECONE_REGION", "us-east-1") # Default to us-east-1 if not set
 
@@ -56,7 +56,7 @@ OLLAMA_EMBEDDING_MODEL_NAME = "nomic-embed-text"
 DEBUG_LLM_CALL = False
 
 
-# --- Helper Function for Processing ETL Requests (Moved from utils) ---
+# --- Helper Function for Processing ETL Requests ---
 def process_etl_request(user_request: str, db_manager_metadata: VectorDBManager, db_manager_approved_tasks: VectorDBManager, parser_agent: ParserAgent, debug_mode: bool) -> dict:
     """
     Processes a single natural language ETL request: parses it and initiates HITL review.
@@ -148,7 +148,7 @@ if __name__ == "__main__":
         embedding_model_name=OLLAMA_EMBEDDING_MODEL_NAME
     )
 
-    # Ingest static dataset metadata (e.g., from your data catalog CSV)
+    # Ingest static dataset metadata
     ingest_dataset_metadata(db_manager_metadata, COLUMNS_DESCRIPTION_CSV)
 
     # Initialize the Parser Agent with both DB managers and the debug mode
