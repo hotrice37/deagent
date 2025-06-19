@@ -12,7 +12,7 @@ import re
 from typing import List, Optional
 
 # Project Imports- for vector database management
-from vector_db_manager import VectorDBManager
+from src.core.vector_db_manager import VectorDBManager
 
 
 # Helper function for robust JSON extraction from LLM output

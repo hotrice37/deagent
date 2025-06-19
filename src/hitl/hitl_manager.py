@@ -18,9 +18,9 @@ from langchain_core.documents import Document # Import Document for type hinting
 from langchain_core.output_parsers import PydanticOutputParser
 
 # Project Imports - for schema and utility functions
-from schemas import ETLTaskDefinition
-from vector_db_manager import VectorDBManager # Import for type hinting (db_manager_approved_tasks)
-from utils import extract_json_from_llm_output # Import the utility function
+from src.core.schemas import ETLTaskDefinition
+from src.core.vector_db_manager import VectorDBManager # Import for type hinting (db_manager_approved_tasks)
+from src.utils.utils import extract_json_from_llm_output # Import the utility function
 
 def initiate_hitl_review(
     task_json: dict,

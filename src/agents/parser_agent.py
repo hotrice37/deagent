@@ -14,9 +14,9 @@ from langchain_ollama.llms import OllamaLLM
 from langchain_core.exceptions import OutputParserException
 
 # Project Imports - for schema and utility functions
-from schemas import ETLTaskDefinition # Import the schema
-from vector_db_manager import VectorDBManager # Import for type hinting
-from utils import extract_json_from_llm_output # Import the utility function
+from src.core.schemas import ETLTaskDefinition # Import the schema
+from src.core.vector_db_manager import VectorDBManager # Import for type hinting
+from src.utils.utils import extract_json_from_llm_output # Import the utility function
 
 class ParserAgent:
     """

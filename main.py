@@ -9,10 +9,10 @@ from dotenv import load_dotenv
 import json
 
 # Import modular components
-from vector_db_manager import VectorDBManager
-from parser_agent import ParserAgent
-from hitl_manager import initiate_hitl_review
-from utils import ingest_dataset_metadata, ingest_approved_etl_task # Import only what's needed from utils
+from src.core.vector_db_manager import VectorDBManager
+from src.agents.parser_agent import ParserAgent
+from src.hitl.hitl_manager import initiate_hitl_review
+from src.utils.utils import ingest_dataset_metadata, ingest_approved_etl_task # Import only what's needed from utils
 
 load_dotenv() # Load environment variables from .env file
 
@@ -25,7 +25,7 @@ PINECONE_CLOUD = os.getenv("PINECONE_CLOUD", "aws") # Default to aws if not set
 PINECONE_REGION = os.getenv("PINECONE_REGION", "us-east-1") # Default to us-east-1 if not set
 
 # Path to the dataset columns description CSV (e.g., from Home Credit competition)
-COLUMNS_DESCRIPTION_CSV = os.path.join(os.path.dirname(__file__), "home-credit-default-risk", "HomeCredit_columns_description.csv")
+COLUMNS_DESCRIPTION_CSV = os.path.join(os.path.dirname(__file__), "data", "home-credit-default-risk", "HomeCredit_columns_description.csv")
 
 # Ensure the CSV file exists for initial metadata loading
 if not os.path.exists(COLUMNS_DESCRIPTION_CSV):
