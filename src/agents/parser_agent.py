@@ -1,5 +1,5 @@
 """
-parser_agent.py
+src/agents/parser_agent.py
 Defines the ParserAgent, responsible for converting natural language requests
 into structured ETL task definitions.
 """

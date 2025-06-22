@@ -1,5 +1,5 @@
 """
-schemas.py
+src/core/schemas.py
 Defines Pydantic schemas for structured data models used throughout the ETL pipeline system.
 """
 

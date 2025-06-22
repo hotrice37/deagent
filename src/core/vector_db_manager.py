@@ -1,5 +1,5 @@
 """
-vector_db_manager.py
+src/core/vector_db_manager.py
 Manages interactions with the Pinecone vector database for storing and querying embeddings.
 """
 

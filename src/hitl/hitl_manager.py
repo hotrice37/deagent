@@ -1,5 +1,5 @@
 """
-hitl_manager.py
+src/hitl/hitl_manager.py
 Manages the Human-in-the-Loop (HITL) review process for ETL task definitions,
 including iterative feedback and modification.
 """
@@ -175,7 +175,7 @@ def initiate_hitl_review(
                 print("Failed to apply modification due to timeout. Please try again or provide more precise feedback.")
             except OutputParserException as e:
                 print(f"Error parsing LLM output during modification: {e}")
-                print(f"Raw LLM output (for debugging): {e.llm_output}")
+                print(f"Raw LLM output (for debugging): {cleaned_json_string_mod if 'cleaned_json_string_mod' in locals() else 'Not available'}")
                 print("Failed to apply modification. Please try again or provide more precise feedback.")
             except json.JSONDecodeError as e:
                 print(f"Error: Cleaned LLM modification output is not valid JSON: {e}")
