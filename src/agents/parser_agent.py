@@ -14,9 +14,10 @@ from langchain_ollama.llms import OllamaLLM
 from langchain_core.exceptions import OutputParserException
 
 # Project Imports - for schema and utility functions
-from src.core.schemas import ETLTaskDefinition # Import the schema
-from src.core.vector_db_manager import VectorDBManager # Import for type hinting
-from src.utils.utils import extract_json_from_llm_output # Import the utility function
+from src.core.schemas import ETLTaskDefinition
+from src.core.vector_db_manager import VectorDBManager
+from src.utils.general_utils import extract_json_from_llm_output # Import from new general_utils
+
 
 class ParserAgent:
     """
@@ -26,11 +27,6 @@ class ParserAgent:
     def __init__(self, vector_db_manager_metadata: VectorDBManager, vector_db_manager_approved_tasks: VectorDBManager, llm_model_name: str, temperature: float = 0, debug_mode: bool = False):
         """
         Initializes the ParserAgent.
-        :param vector_db_manager_metadata: An instance of VectorDBManager for dataset metadata.
-        :param vector_db_manager_approved_tasks: An instance of VectorDBManager for approved tasks.
-        :param llm_model_name: The name of the Ollama model to use for text generation (e.g., 'llama3').
-        :param temperature: The creativity temperature for the LLM. 0 for deterministic.
-        :param debug_mode: A boolean flag to enable/disable debug logging.
         """
         self.llm = OllamaLLM(model=llm_model_name, temperature=temperature, request_timeout=300.0, base_url="http://localhost:11434", verbose=True)
         self.parser = PydanticOutputParser(pydantic_object=ETLTaskDefinition)
@@ -69,27 +65,13 @@ Your task is to analyze the user's request and any provided historical context o
         """
         Parses a natural language user request into a structured ETL task definition,
         using provided context.
-        :param user_request: The natural language backlog item.
-        :param context_string: The combined and formatted context from vector databases.
-        :return: A dictionary representing the parsed ETLTaskDefinition, or an error dictionary.
         """
-        # print("DEBUG_FLOW: Starting parse_request method (now accepts context).")
-
         current_context_for_llm = context_string
         
-        # if self.debug_mode:
-        #     print("DEBUG_LLM_CALL is True: Using provided context string for LLM invocation.")
-        #     print(f"DEBUG_LLM_CALL: Context snippet: '{current_context_for_llm[:500]}...'")
-        # else:
-        #     print("DEBUG_LLM_CALL is False: Using full context for LLM invocation.")
-        #     print(f"DEBUG_FLOW: Context string length for LLM: {len(current_context_for_llm)} characters.")
-
         chain = self.prompt_template | self.llm
         
-        # print("\nDEBUG: Attempting to invoke LLM chain for initial parse...")
         try:
             raw_llm_string_output = chain.invoke({"request": user_request, "context": current_context_for_llm}, config={"timeout": 300.0})
-            # print("DEBUG: LLM chain invocation for initial parse completed.")
             
             cleaned_json_string = extract_json_from_llm_output(raw_llm_string_output)
             
@@ -99,7 +81,6 @@ Your task is to analyze the user's request and any provided historical context o
                 print("----------------------------------------------------------")
 
             parsed_output_pydantic = self.parser.parse(cleaned_json_string)
-            # print("DEBUG_FLOW: Pydantic parsing successful.")
             return parsed_output_pydantic.model_dump()
             
         except TimeoutError:

@@ -17,9 +17,9 @@ from langchain_core.exceptions import OutputParserException
 
 
 # Project Imports - for schema and utility functions
-from src.core.schemas import ETLTaskDefinition, DataCleaningStep, FeatureEngineeringStep, JoinOperation, ScoringModel # Import all necessary schemas
+from src.core.schemas import ETLTaskDefinition, DataCleaningStep, FeatureEngineeringStep, JoinOperation, ScoringModel
 from src.core.vector_db_manager import VectorDBManager
-from src.utils.utils import extract_json_from_llm_output
+from src.utils.general_utils import extract_json_from_llm_output, reconstruct_from_etl_tasks_wrapper # Import from general_utils
 
 
 class PlannerAgent:
@@ -108,30 +108,17 @@ The goal is to produce a refined ETL task definition that is both accurate and e
     def validate_and_refine_task(self, initial_task_json: dict, dataset_schema_map: Dict[str, Dict[str, Any]]) -> dict:
         """
         Validates and refines an ETL task definition against a structured dataset schema map.
-        :param initial_task_json: The ETL task definition dictionary from the Parser Agent.
-        :param dataset_schema_map: A structured dictionary representing the dataset schema.
-                                   Expected format: {table_name: {column_name: {description, data_type, is_target, is_id}}}
-        :return: A refined ETL task definition dictionary or an error dictionary.
         """
-        # print("\nDEBUG_FLOW: Starting PlannerAgent.validate_and_refine_task.")
-
-        # Convert the schema map to a readable string for the LLM
         schema_info_string = json.dumps(dataset_schema_map, indent=2)
-        # if self.debug_mode:
-        #     print(f"DEBUG_PLANNER: Schema Info Snippet:\n{schema_info_string[:1000]}...")
-
-        # Convert initial_task_json to string for prompt
         initial_task_string = json.dumps(initial_task_json, indent=2)
 
         chain = self.prompt_template | self.llm
 
-        # print("\nDEBUG_PLANNER: Attempting to invoke LLM chain for task refinement...")
         try:
             raw_llm_string_output = chain.invoke({
                 "initial_task_json": initial_task_string,
                 "dataset_schema_info": schema_info_string
             }, config={"timeout": 300.0})
-            # print("DEBUG_PLANNER: LLM chain invocation for task refinement completed.")
 
             cleaned_json_string = extract_json_from_llm_output(raw_llm_string_output)
 
@@ -140,76 +127,21 @@ The goal is to produce a refined ETL task definition that is both accurate and e
                 print(cleaned_json_string)
                 print("------------------------------------------------------------------")
 
-            # --- Robust Parsing Logic ---
             try:
-                # Attempt direct parsing first
                 refined_task_pydantic = self.parser.parse(cleaned_json_string)
-                # print("DEBUG_PLANNER: Direct Pydantic parsing of refined task successful.")
                 return refined_task_pydantic.model_dump()
             except ValidationError as ve:
-                # If direct parsing fails, check if it's due to the 'etl_tasks' wrapping
                 if self.debug_mode:
-                    print(f"DEBUG_PLANNER: Direct Pydantic parsing failed with ValidationError. Attempting fallback for 'etl_tasks' wrapper. Details: {ve}")
+                    print(f"DEBUG_PLANNER: Direct Pydantic parsing failed. Attempting fallback for 'etl_tasks' wrapper. Details: {ve}")
 
                 try:
-                    # Attempt to load as a generic JSON object
                     parsed_as_dict = json.loads(cleaned_json_string)
-
-                    # Check for the problematic 'etl_tasks' list structure
                     if isinstance(parsed_as_dict, dict) and "etl_tasks" in parsed_as_dict and isinstance(parsed_as_dict["etl_tasks"], list):
-                        # Extract components from the list and re-assemble a proper ETLTaskDefinition
-                        reconstructed_task = {
-                            "pipeline_name": initial_task_json.get("pipeline_name", "Reconstructed Pipeline"),
-                            "main_goal": initial_task_json.get("main_goal", "Reconstructed Goal"),
-                            "initial_tables": initial_task_json.get("initial_tables", []),
-                            "join_operations": [],
-                            "data_cleaning_steps": [],
-                            "feature_engineering_steps": [],
-                            "scoring_model": None,
-                            "output_format": initial_task_json.get("output_format", "dataframe"),
-                            "output_location": initial_task_json.get("output_location", None),
-                            "data_quality_checks": initial_task_json.get("data_quality_checks", None),
-                            "version_control_repo": initial_task_json.get("version_control_repo", None),
-                            "orchestration_tool": initial_task_json.get("orchestration_tool", None),
-                            "human_approval_required": initial_task_json.get("human_approval_required", True),
-                        }
-
-                        for sub_task in parsed_as_dict["etl_tasks"]:
-                            # Attempt to extract known sub-schema elements from each "sub_task" dictionary
-                            if "join_type" in sub_task and "on_columns" in sub_task:
-                                try:
-                                    reconstructed_task["join_operations"].append(JoinOperation(**sub_task).model_dump())
-                                except ValidationError as e:
-                                    # print(f"DEBUG_PLANNER: Could not parse sub-task as JoinOperation: {e}")
-                                    pass
-                            elif "type" in sub_task and "details" in sub_task and any(k in sub_task["type"].lower() for k in ["imputation", "cleaning", "outlier", "deduplication", "conversion"]):
-                                try:
-                                    reconstructed_task["data_cleaning_steps"].append(DataCleaningStep(**sub_task).model_dump())
-                                except ValidationError as e:
-                                    # print(f"DEBUG_PLANNER: Could not parse sub-task as DataCleaningStep: {e}")
-                                    pass
-                            elif "type" in sub_task and "details" in sub_task and any(k in sub_task["type"].lower() for k in ["feature_engineering", "aggregation", "encoding", "scaling"]):
-                                try:
-                                    reconstructed_task["feature_engineering_steps"].append(FeatureEngineeringStep(**sub_task).model_dump())
-                                except ValidationError as e:
-                                    # print(f"DEBUG_PLANNER: Could not parse sub-task as FeatureEngineeringStep: {e}")
-                                    pass
-                            elif "target_column" in sub_task:
-                                try:
-                                    reconstructed_task["scoring_model"] = ScoringModel(**sub_task).model_dump()
-                                except ValidationError as e:
-                                    # print(f"DEBUG_PLANNER: Could not parse sub-task as ScoringModel: {e}")
-                                    pass
-
-                            if "table_name" in sub_task and sub_task["table_name"] not in reconstructed_task["initial_tables"]:
-                                reconstructed_task["initial_tables"].append(sub_task["table_name"])
-
-                        # print("DEBUG_PLANNER: Reconstructed task from 'etl_tasks' wrapper. Attempting Pydantic parse.")
+                        # Use the moved function from general_utils
+                        reconstructed_task = reconstruct_from_etl_tasks_wrapper(parsed_as_dict, initial_task_json)
                         refined_task_pydantic = self.parser.parse(json.dumps(reconstructed_task))
-                        # print("DEBUG_PLANNER: Pydantic parsing of reconstructed task successful via fallback.")
                         return refined_task_pydantic.model_dump()
                     else:
-                        # print("DEBUG_PLANNER: 'etl_tasks' wrapper not found or not in expected list format. Re-raising original validation error.")
                         raise ve
                 except (json.JSONDecodeError, ValueError) as inner_e:
                     print(f"DEBUG_PLANNER: Fallback parsing failed or unexpected inner structure: {inner_e}")
