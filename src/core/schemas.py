@@ -4,12 +4,17 @@ Defines Pydantic schemas for structured data models used throughout the ETL pipe
 """
 
 from pydantic import BaseModel, Field
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Dict, Any # Added Dict and Any for details fields
 
 class DataCleaningStep(BaseModel):
     """Defines a single data cleaning or preprocessing operation."""
     type: str = Field(..., description="Type of cleaning operation (e.g., 'imputation', 'outlier_removal', 'feature_engineering')")
-    details: dict = Field(..., description="Specific parameters for the cleaning operation (e.g., {'strategy': 'mean', 'columns': ['age']})")
+    details: Dict[str, Any] = Field(..., description="Specific parameters for the cleaning operation (e.g., {'strategy': 'mean', 'columns': ['age']})")
+
+class FeatureEngineeringStep(BaseModel):
+    """Defines a feature engineering step."""
+    type: str = Field(..., description="The type of feature engineering operation (e.g., 'aggregation', 'one_hot_encoding', 'scaling', 'polynomial_features', 'date_features').")
+    details: Dict[str, Any] = Field(default_factory=dict, description="A dictionary containing parameters or specific details for the feature engineering step (e.g., {'columns': ['INCOME', 'AGE'], 'operation': 'ratio'}).")
 
 class ScoringModel(BaseModel):
     """Defines the details of a scoring or prediction model."""
@@ -22,7 +27,7 @@ class JoinOperation(BaseModel):
     """Defines a data join operation between two table_name."""
     left_table: str = Field(..., description="Name of the left table for the join (e.g., 'application_train')")
     right_table: str = Field(..., description="Name of the right table for the join (e.g., 'bureau')")
-    join_type: Literal["inner", "left", "right", "outer"] = Field(..., description="Type of join (e.g., 'left', 'inner'). Defaults to 'left' if not specified.")
+    join_type: Literal["inner", "left", "right", "outer"] = Field("left", description="Type of join (e.g., 'left', 'inner'). Defaults to 'left' if not specified.")
     on_columns: List[str] = Field(..., description="List of columns to join on (e.g., ['SK_ID_CURR'])")
     description: Optional[str] = Field(None, description="A brief description of the join operation.")
 
@@ -33,6 +38,7 @@ class ETLTaskDefinition(BaseModel):
     initial_tables: List[str] = Field([], description="List of initial tables required from the dataset (e.g., ['application_train', 'bureau', 'bureau_balance'])")
     join_operations: List[JoinOperation] = Field([], description="List of join operations to perform in sequence.")
     data_cleaning_steps: List[DataCleaningStep] = Field([], description="List of data cleaning and preprocessing steps to apply.")
+    feature_engineering_steps: List[FeatureEngineeringStep] = Field([], description="List of feature engineering steps to apply.") # Now correctly defined
     scoring_model: Optional[ScoringModel] = Field(None, description="Details about the scoring model to be applied, if any.")
     output_format: Optional[str] = Field("dataframe", description="Desired output format after ETL (e.g., 'dataframe', 'csv', 'parquet').")
     output_location: Optional[str] = Field(None, description="Where to save the final output (e.g., 's3://my-bucket/processed_data/').")

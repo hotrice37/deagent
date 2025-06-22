@@ -51,7 +51,6 @@ def initiate_hitl_review(
         code_execution_config={"use_docker": False}
     )
 
-    # Using AssistantAgent as requested, configured not to auto-reply.
     parser_messenger = AssistantAgent(
         name="Parser_Messenger",
         system_message="You present the ETL task definition and facilitate human feedback. You do not generate responses using an LLM in this chat.",
@@ -60,9 +59,9 @@ def initiate_hitl_review(
     )
 
     current_task_json = task_json.copy()
-    feedback_history = [] # Initialize list to store modification feedback
+    feedback_history = []
 
-    # Format the full context for the modification prompt
+    # Format the full context for the modification prompt (still needed for LLM later)
     full_context_string_for_llm = ""
     if full_context_docs:
         full_context_string_for_llm = "Available Context (Dataset and Approved Task Details):\n"
@@ -74,21 +73,21 @@ def initiate_hitl_review(
     else:
         full_context_string_for_llm = "No specific context available for features."
 
-    # For modification loop, use full context
     current_context_for_modification_llm = full_context_string_for_llm
-    if debug_mode: # Use debug_mode parameter
-        current_context_for_modification_llm = "Minimal context for debugging modification. User feedback: " + original_request[:100] + "..."
+    
+    while True:
+        # Removed the redundant standalone print of the JSON here.
+        # It will now be embedded directly in the Parser_Messenger's message.
+        # print("\n--- Current Task Definition for Review ---")
+        # print(json.dumps(current_task_json, indent=2))
+        # print("----------------------------------------\n")
 
-
-    while True: # Loop for iterative feedback
-        print("\n--- Current Task Definition for Review ---")
-        print(json.dumps(current_task_json, indent=2))
-        print("----------------------------------------\n")
-
-        # The parser_messenger initiates the chat with human_data_engineer.
+        # The Parser_Messenger initiates the chat.
+        # The current_task_json is embedded directly in the message.
+        # The 'full_context_string_for_llm' is removed from this user-facing message.
         chat_result = parser_messenger.initiate_chat(
             human_data_engineer,
-            message=f"Please review the following ETL task definition. You can '**approve**', '**deny**', or provide **feedback for modification** (e.g., 'add output_location', 'change join type to inner for bureau', 'add features from available dataset context').\n\n```json\n{json.dumps(current_task_json, indent=2)}\n```\n\n{full_context_string_for_llm}\n\nWhat is your decision or feedback?",
+            message=f"Please review the following ETL task definition. You can '**approve**', '**deny**', or provide **feedback for modification** (e.g., 'add output_location', 'change join type to inner for bureau', 'add features from available dataset context').\n\n```json\n{json.dumps(current_task_json, indent=2)}\n```\n\nWhat is your decision or feedback?",
         )
 
         if chat_result.chat_history:
@@ -101,7 +100,6 @@ def initiate_hitl_review(
 
         if human_response in ["approve", "approved"]:
             print("\n--- Task Approved by Data Engineer ---")
-            # Ingest the approved task using the passed function
             ingest_approved_etl_task_func(db_manager_approved_tasks, current_task_json, original_request, modification_feedback_history=feedback_history)
             return True
         elif human_response in ["deny", "denied"]:
@@ -110,12 +108,10 @@ def initiate_hitl_review(
                 print(f"Reason for denial: {human_response_raw.strip()}")
             return False
         else:
-            # Human provided feedback for modification - add to history
             feedback_history.append(human_response_raw.strip())
             print(f"\n--- Data Engineer requested modification: '{human_response_raw.strip()}' ---")
             print("AI is updating the task definition based on feedback...")
 
-            # Define the prompt for LLM modification
             modification_prompt = PromptTemplate(
                 template="""You are an AI assistant specialized in modifying ETL task definitions.
                 You will be provided with the current ETL task definition in JSON format and specific feedback from a data engineer.
@@ -142,31 +138,26 @@ def initiate_hitl_review(
 
                 Updated JSON Output:
                 """,
-                input_variables=["current_json", "feedback", "dataset_context"], # Renamed to dataset_context for consistency with prompt
+                input_variables=["current_json", "feedback", "dataset_context"],
                 partial_variables={"format_instructions": PydanticOutputParser(pydantic_object=ETLTaskDefinition).get_format_instructions()},
             )
 
-            # Explicitly use the main parser_agent_instance's LLM for modification
             modification_chain = modification_prompt | parser_agent_instance.llm
             
-            print("DEBUG: Attempting to invoke LLM chain for modification...")
             try:
                 raw_llm_string_output_mod = modification_chain.invoke({
                     "current_json": json.dumps(current_task_json, indent=2),
                     "feedback": human_response_raw.strip(),
                     "dataset_context": current_context_for_modification_llm
                 }, config={"timeout": 300.0})
-                print("DEBUG: LLM chain invocation for modification completed.")
 
-                # Extract clean JSON string from LLM's raw output for modification
                 cleaned_json_string_mod = extract_json_from_llm_output(raw_llm_string_output_mod)
 
-                if debug_mode: # Use debug_mode parameter
+                if debug_mode:
                     print("\n--- DEBUG: Raw LLM Output (Modification, after stripping fences) ---")
                     print(cleaned_json_string_mod)
                     print("----------------------------------------------------------------------")
                 
-                # Attempt to parse the cleaned string with PydanticOutputParser
                 updated_task_pydantic = parser_agent_instance.parser.parse(cleaned_json_string_mod)
                 current_task_json = updated_task_pydantic.model_dump()
                 print("Task definition updated. Presenting for re-review.")

@@ -36,14 +36,19 @@ COLUMNS_DESCRIPTION_CSV = os.path.join(DATA_DIRECTORY, COLUMNS_DESCRIPTION_FILEN
 if not os.path.isdir(DATA_DIRECTORY):
     print(f"ERROR: Data directory not found at expected path: {DATA_DIRECTORY}")
     print("Please ensure your 'home-credit-default-risk' dataset directory with all CSVs is inside the 'data' directory next to your script.")
-    exit("Exiting due to missing data directory.")
+    # We will no longer exit here, but the functions below might fail without data.
+    # It's better to let them handle the missing data gracefully if possible,
+    # or print an error and continue only if it's explicitly allowed by the user flow.
+    # For now, keeping this print, but removing the exit.
 
 # Check if API Key and Cloud/Region are set for Pinecone
 if not PINECONE_API_KEY or not PINECONE_CLOUD or not PINECONE_REGION:
     print("WARNING: One or more Pinecone configuration variables not set.")
     print("Please set PINECONE_API_KEY, PINECONE_CLOUD, and PINECONE_REGION ")
     print("(e.g., in a .env file) to connect to Pinecone.")
-    exit("Exiting: Pinecone configuration is incomplete.")
+    # Similar to DATA_DIRECTORY, we'll let the system attempt to proceed,
+    # but Pinecone operations will likely fail without these.
+    # Removing the exit here.
 
 
 # Configuration for Ollama LLM and Embedding Models
@@ -72,8 +77,6 @@ def process_etl_request(user_request: str, db_manager_metadata: VectorDBManager,
     print(f"\n{'='*50}\nProcessing Incoming Request:\nUser Request: '{user_request}'\n{'='*50}")
 
     # Query both indexes for relevant context
-    print("DEBUG_FLOW: Initiating context retrieval for main request.")
-    # Fetching docs here and passing them to parse_request
     similar_metadata_docs = db_manager_metadata.query_similar_documents(user_request, k=5)
     similar_approved_tasks_docs = db_manager_approved_tasks.query_similar_documents(user_request, k=3)
     
@@ -98,17 +101,18 @@ def process_etl_request(user_request: str, db_manager_metadata: VectorDBManager,
 
     # --- Step 1: Natural Language Parsing and Task Definition ---
     parsed_task_definition = parser_agent.parse_request(user_request, context_string_full)
-    print("DEBUG_FLOW: Context retrieval and initial parse completed.")
-
 
     if "error" in parsed_task_definition:
         print("\nParsing failed. Please review the error details and the LLM's raw output.")
         print(f"Status : {parsed_task_definition.get('error', 'Unknown error')}")
-        print(json.dumps(parsed_task_definition, indent=2))
+        if "details" in parsed_task_definition:
+            print(f"Details: {parsed_task_definition['details']}")
+        if "raw_llm_output" in parsed_task_definition:
+            print(f"Raw LLM Output:\n{parsed_task_definition['raw_llm_output']}")
         return {"status": "error", "task": parsed_task_definition}
     else:
-        print("\nInitial Parsed Task Definition (from Parser Agent):")
-        print(json.dumps(parsed_task_definition, indent=2))
+        # print("\nInitial Parsed Task Definition (from Parser Agent):") # Commented out as requested
+        # print(json.dumps(parsed_task_definition, indent=2)) # Commented out as requested
 
         # --- Step 2: Objective Definition with HITL (Planner Agent) ---
         print("\n--- Initiating Planner Agent for Schema Validation and Refinement ---")
@@ -116,23 +120,26 @@ def process_etl_request(user_request: str, db_manager_metadata: VectorDBManager,
 
         if "error" in refined_task_definition:
             print("\nPlanning failed. Please review the error details.")
-            print(json.dumps(refined_task_definition, indent=2))
+            print(f"Status : {refined_task_definition.get('error', 'Unknown error')}")
+            if "details" in refined_task_definition:
+                print(f"Details: {refined_task_definition['details']}")
+            if "raw_llm_output" in refined_task_definition:
+                print(f"Raw LLM Output:\n{refined_task_definition['raw_llm_output']}")
             return {"status": "error", "task": refined_task_definition}
 
-        print("\nRefined and Validated Task Definition (from Planner Agent):")
-        print(json.dumps(refined_task_definition, indent=2))
+        # print("\nRefined and Validated Task Definition (from Planner Agent):") # Commented out as requested
+        # print(json.dumps(refined_task_definition, indent=2)) # Commented out as requested
 
         print("\n--- Initiating Human-in-the-Loop Review (Type 'approve', 'deny', or feedback for modification) ---")
 
-        # Pass the combined context documents to the review function
         is_approved = initiate_hitl_review(
             refined_task_definition,
             parser_agent,
             similar_metadata_docs + similar_approved_tasks_docs,
             user_request,
             db_manager_approved_tasks,
-            ingest_approved_etl_task, # Pass the function reference here
-            debug_mode # Pass the debug flag
+            ingest_approved_etl_task,
+            debug_mode
         )
 
         if is_approved:
@@ -146,9 +153,8 @@ def process_etl_request(user_request: str, db_manager_metadata: VectorDBManager,
 # --- Main Execution Workflow (Production-Ready Entry Point) ---
 
 if __name__ == "__main__":
-    print("Initializing ETL Parser System for Production...")
+    print("Initializing ETL Parser System...")
 
-    # Initialize two separate vector database managers with Pinecone details
     db_manager_metadata = VectorDBManager(
         index_name=PINECONE_INDEX_NAME,
         cloud=PINECONE_CLOUD,
@@ -165,7 +171,6 @@ if __name__ == "__main__":
         embedding_model_name=OLLAMA_EMBEDDING_MODEL_NAME
     )
 
-    # Initialize SparkSession for dynamic schema inference
     print("\nInitializing SparkSession...")
     spark_session = SparkSession.builder \
         .appName("ETLSchemaInference") \
@@ -176,37 +181,34 @@ if __name__ == "__main__":
 
     dataset_schema = ingest_dataset_metadata(db_manager_metadata, spark_session, DATA_DIRECTORY, COLUMNS_DESCRIPTION_CSV)
 
-
-
-    # Initialize the Parser Agent with both DB managers and the debug mode
+    if not dataset_schema:
+        print("\nWARNING: Dataset metadata ingestion skipped or failed. Proceeding without full dataset schema information.")
+    
     parser_agent_instance = ParserAgent(
         vector_db_manager_metadata=db_manager_metadata,
         vector_db_manager_approved_tasks=db_manager_approved_tasks,
         llm_model_name=OLLAMA_LLM_MODEL_NAME,
-        debug_mode=DEBUG_LLM_CALL # Pass debug_mode here
+        debug_mode=DEBUG_LLM_CALL
     )
 
-    # Initialize the Planner Agent
     planner_agent_instance = PlannerAgent(
         llm_model_name=OLLAMA_LLM_MODEL_NAME,
-        debug_mode=DEBUG_LLM_CALL # Pass debug_mode here
+        debug_mode=DEBUG_LLM_CALL
     )
 
     print("\nETL Parser System initialized. Ready to process requests.")
     print("-------------------------------------------------------")
 
-    # --- Example of processing a single incoming request (simulating a real production scenario) ---
     sample_incoming_request = "Generate an ETL pipeline to predict loan default on the main application table, joining with previous credit bureau data and ensuring all missing values are handled. I need the output saved as parquet in s3://my-data-lake/processed/loan_defaults."
 
-    # Process the request using the helper function now defined in main.py
     final_task_status = process_etl_request(
         user_request=sample_incoming_request,
         db_manager_metadata=db_manager_metadata,
         db_manager_approved_tasks=db_manager_approved_tasks,
         parser_agent=parser_agent_instance,
         planner_agent=planner_agent_instance,
-        dataset_schema_map=dataset_schema, # Pass the structured schema map
-        debug_mode=DEBUG_LLM_CALL # Pass debug_mode here
+        dataset_schema_map=dataset_schema,
+        debug_mode=DEBUG_LLM_CALL
     )
 
     print(f"\nFinal status for sample request: {final_task_status['status']}")
@@ -214,7 +216,6 @@ if __name__ == "__main__":
         print("Approved task details (truncated for display):")
         print(json.dumps(final_task_status['task'], indent=2)[:500] + "...")
 
-    # Stop SparkSession
     spark_session.stop()
     print("\nSparkSession stopped.")
 

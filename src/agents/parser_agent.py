@@ -32,11 +32,11 @@ class ParserAgent:
         :param temperature: The creativity temperature for the LLM. 0 for deterministic.
         :param debug_mode: A boolean flag to enable/disable debug logging.
         """
-        self.llm = OllamaLLM(model=llm_model_name, temperature=temperature, request_timeout=300.0, base_url="http://localhost:11434", verbose=True) # Increased timeout
+        self.llm = OllamaLLM(model=llm_model_name, temperature=temperature, request_timeout=300.0, base_url="http://localhost:11434", verbose=True)
         self.parser = PydanticOutputParser(pydantic_object=ETLTaskDefinition)
         self.vector_db_manager_metadata = vector_db_manager_metadata
         self.vector_db_manager_approved_tasks = vector_db_manager_approved_tasks
-        self.debug_mode = debug_mode # Store debug mode as instance variable
+        self.debug_mode = debug_mode
 
         self.prompt_template = PromptTemplate(
             template="""You are an AI assistant specialized in parsing natural language requests for ETL pipelines and converting them into a structured JSON format.
@@ -48,7 +48,6 @@ Your task is to analyze the user's request and any provided historical context o
 - Deconstruct any join operations, specifying `left_table`, `right_table`, `join_type` (default to 'left' if not specified), and `on_columns`. Use context for correct column names if possible.
 - Infer data cleaning or feature engineering steps if described (e.g., "cleaning the data", "impute missing values"). Provide a generic `type` and `details` dictionary for these.
 - If a scoring or prediction objective is mentioned, specify the `scoring_model`'s `name` (e.g., 'Logistic Regression', 'XGBoost', or 'Generic ML Model' if unspecified), its `objective`, and `target_column`. Use context to accurately identify the target column (e.e.g., 'TARGET').
-- Ensure all fields in the JSON adhere to the types and constraints defined in the schema.
 - Do NOT include any explanations or conversational text outside the JSON block.
 
 **Pydantic Schema:**
@@ -74,39 +73,33 @@ Your task is to analyze the user's request and any provided historical context o
         :param context_string: The combined and formatted context from vector databases.
         :return: A dictionary representing the parsed ETLTaskDefinition, or an error dictionary.
         """
-        print("DEBUG_FLOW: Starting parse_request method (now accepts context).")
-        
-        # Use the provided context string
+        # print("DEBUG_FLOW: Starting parse_request method (now accepts context).")
+
         current_context_for_llm = context_string
         
-        if self.debug_mode: # Use instance variable
-            print("DEBUG_LLM_CALL is True: Using provided context string for LLM invocation.")
-            print(f"DEBUG_LLM_CALL: Context snippet: '{current_context_for_llm[:500]}...'")
-        else:
-            print("DEBUG_LLM_CALL is False: Using full context for LLM invocation.")
-            print(f"DEBUG_FLOW: Context string length for LLM: {len(current_context_for_llm)} characters.")
+        # if self.debug_mode:
+        #     print("DEBUG_LLM_CALL is True: Using provided context string for LLM invocation.")
+        #     print(f"DEBUG_LLM_CALL: Context snippet: '{current_context_for_llm[:500]}...'")
+        # else:
+        #     print("DEBUG_LLM_CALL is False: Using full context for LLM invocation.")
+        #     print(f"DEBUG_FLOW: Context string length for LLM: {len(current_context_for_llm)} characters.")
 
-
-        # Step 2: Formulate the prompt with injected context and invoke the LLM
-        chain = self.prompt_template | self.llm # The LLM will return a raw string
+        chain = self.prompt_template | self.llm
         
-        print("\nDEBUG: Attempting to invoke LLM chain for initial parse...")
+        # print("\nDEBUG: Attempting to invoke LLM chain for initial parse...")
         try:
-            # The raw_llm_string_output will be a string from OllamaLLM
             raw_llm_string_output = chain.invoke({"request": user_request, "context": current_context_for_llm}, config={"timeout": 300.0})
-            print("DEBUG: LLM chain invocation for initial parse completed.")
+            # print("DEBUG: LLM chain invocation for initial parse completed.")
             
-            # Extract clean JSON string from LLM's raw output
             cleaned_json_string = extract_json_from_llm_output(raw_llm_string_output)
             
-            if self.debug_mode: # Use instance variable
+            if self.debug_mode:
                 print("\n--- DEBUG: Raw LLM Output (after stripping fences) ---")
                 print(cleaned_json_string)
                 print("----------------------------------------------------------")
 
-            # Attempt to parse the cleaned string with PydanticOutputParser
             parsed_output_pydantic = self.parser.parse(cleaned_json_string)
-            print("DEBUG_FLOW: Pydantic parsing successful.")
+            # print("DEBUG_FLOW: Pydantic parsing successful.")
             return parsed_output_pydantic.model_dump()
             
         except TimeoutError:
