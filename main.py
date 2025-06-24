@@ -12,9 +12,10 @@ from pyspark.sql import SparkSession
 from src.core.vector_db_manager import VectorDBManager
 from src.agents.parser_agent import ParserAgent
 from src.agents.planner_agent import PlannerAgent
+from src.agents.etl_generator_agent import ETLGeneratorAgent
 from src.orchestrator import ETLOrchestrator
-from src.utils.data_ingestion_utils import ingest_dataset_metadata # From new data_ingestion_utils
-from src.utils.etl_task_utils import ingest_approved_etl_task # From new etl_task_utils
+from src.utils.data_ingestion_utils import ingest_dataset_metadata
+from src.utils.etl_task_utils import ingest_approved_etl_task
 from src.config import (
     PINECONE_API_KEY, PINECONE_INDEX_NAME, PINECONE_APPROVED_TASKS_INDEX_NAME,
     PINECONE_CLOUD, PINECONE_REGION, DATA_DIRECTORY, COLUMNS_DESCRIPTION_CSV,
@@ -46,10 +47,10 @@ if __name__ == "__main__":
         embedding_model_name=OLLAMA_EMBEDDING_MODEL_NAME
     )
 
-    # Initialize SparkSession for dynamic schema inference
+    # Initialize SparkSession for dynamic schema inference and ETL execution
     print("\nInitializing SparkSession...")
     spark_session = SparkSession.builder \
-        .appName("ETLSchemaInference") \
+        .appName("ETLSchemaInferenceAndExecution") \
         .master("local[*]") \
         .config("spark.driver.memory", "6g") \
         .getOrCreate()
@@ -75,15 +76,25 @@ if __name__ == "__main__":
         debug_mode=DEBUG_LLM_CALL
     )
 
+    # Initialize the ETL Generator Agent
+    etl_generator_agent_instance = ETLGeneratorAgent(
+        llm_model_name=OLLAMA_LLM_MODEL_NAME,
+        debug_mode=DEBUG_LLM_CALL
+    )
+
     # Initialize the ETL Orchestrator
     etl_orchestrator = ETLOrchestrator(
+        spark_session=spark_session,
         db_manager_metadata=db_manager_metadata,
         db_manager_approved_tasks=db_manager_approved_tasks,
         parser_agent=parser_agent_instance,
         planner_agent=planner_agent_instance,
+        etl_generator_agent=etl_generator_agent_instance,
         dataset_schema_map=dataset_schema,
+        data_base_path=DATA_DIRECTORY,
         debug_mode=DEBUG_LLM_CALL,
-        ingest_approved_etl_task_func=ingest_approved_etl_task
+        ingest_approved_etl_task_func=ingest_approved_etl_task,
+        ollama_llm_model_name=OLLAMA_LLM_MODEL_NAME
     )
 
     print("\nETL Parser System initialized. Ready to process requests.")
